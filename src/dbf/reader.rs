@@ -10,10 +10,10 @@ use super::Parser;
 use super::{FieldInfo, Header};
 use super::memo::MemoReader;
 
-pub struct DbfReader<'a, R: Read + Seek> {
+pub struct DbfReader<R: Read + Seek> {
     reader: R,
     header: Header,
-    deserializer: DbfDeserializer<'a, R>,
+    deserializer: DbfDeserializer<R>,
 }
 
 fn read_field_info(buf: &[u8]) -> Result<Vec<FieldInfo>, UnsupportedFieldTypeError> {
@@ -39,7 +39,7 @@ fn read_field_info(buf: &[u8]) -> Result<Vec<FieldInfo>, UnsupportedFieldTypeErr
         .collect()
 }
 
-impl<'a, R: Read + Seek> DbfReader<'a, R> {
+impl<'a, R: Read + Seek> DbfReader<R> {
     pub fn from_reader(mut reader: R, memo_reader: Option<R>) -> Result<Self, Box<dyn Error>> {
         let header = Header::from_reader(&mut reader)?;
 
@@ -91,7 +91,7 @@ impl<'a, R: Read + Seek> DbfReader<'a, R> {
         T::deserialize(&mut self.deserializer).map(Some).map_err(From::from)
     }
 
-    pub fn records<T>(self) -> RecordIterator<'a, R, T>
+    pub fn records<T>(self) -> RecordIterator<R, T>
     where
         T: DeserializeOwned,
     {
@@ -100,25 +100,25 @@ impl<'a, R: Read + Seek> DbfReader<'a, R> {
 }
 
 
-pub struct RecordIterator<'a, R, T>
+pub struct RecordIterator<R, T>
 where
     R: Read + Seek,
     T: DeserializeOwned,
 {
-    parser: DbfReader<'a, R>,
+    parser: DbfReader<R>,
     _type: PhantomData<T>,
 }
 
-impl<'a, R: Read + Seek, T: DeserializeOwned> RecordIterator<'a, R, T>
+impl<R: Read + Seek, T: DeserializeOwned> RecordIterator<R, T>
 {
-    pub fn new(parser: DbfReader<'a, R>) -> Self {
+    pub fn new(parser: DbfReader<R>) -> Self {
         Self {
             parser, _type: PhantomData
         }
     }
 }
 
-impl<'a, R: Read + Seek, T: DeserializeOwned> Iterator for RecordIterator<'a, R, T> {
+impl<R: Read + Seek, T: DeserializeOwned> Iterator for RecordIterator<R, T> {
     type Item = Result<T, Box<dyn std::error::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {

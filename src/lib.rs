@@ -12,7 +12,7 @@ pub use dbf::{DbfReader, MemoReader, RecordIterator};
 pub use model::Date;
 pub use value::Value;
 
-pub fn read<'a, P, T>(table_path: P, memo_path: Option<P>) -> Result<RecordIterator<'a, File, T>, Box<dyn std::error::Error>>
+pub fn read<P, T>(table_path: P, memo_path: Option<P>) -> Result<RecordIterator<File, T>, Box<dyn std::error::Error>>
 where
     P: AsRef<Path>,
     T: DeserializeOwned,

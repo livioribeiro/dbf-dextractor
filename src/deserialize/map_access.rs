@@ -5,14 +5,14 @@ use serde::de::{DeserializeSeed, MapAccess};
 use super::DbfDeserializer;
 use crate::error::DeserializeError;
 
-pub struct RecordReader<'a, 'de: 'a, R: Read + Seek> {
-    deserializer: &'a mut DbfDeserializer<'de, R>,
+pub struct RecordReader<'a, R: Read + Seek> {
+    deserializer: &'a mut DbfDeserializer<R>,
     fields: &'a [&'a str],
     index: usize,
 }
 
-impl<'a, 'de: 'a, R: Read + Seek> RecordReader<'a, 'de, R> {
-    pub fn new(deserializer: &'a mut DbfDeserializer<'de, R>, fields: &'a [&'a str]) -> Self {
+impl<'a, R: Read + Seek> RecordReader<'a, R> {
+    pub fn new(deserializer: &'a mut DbfDeserializer<R>, fields: &'a [&'a str]) -> Self {
         Self {
             deserializer,
             fields,
@@ -21,7 +21,7 @@ impl<'a, 'de: 'a, R: Read + Seek> RecordReader<'a, 'de, R> {
     }
 }
 
-impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, 'de, R> {
+impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, R> {
     type Error = DeserializeError;
 
     fn next_key_seed<K>(
@@ -47,6 +47,9 @@ impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, 'de, R> {
     {
         self.deserializer.set_field_with_name(self.fields[self.index])?;
         self.index += 1;
+        // seed.deserialize(unsafe {
+        //     std::mem::transmute::<&mut DbfDeserializer<R>, &'de mut DbfDeserializer<R>>(&mut *self.deserializer)
+        // })
         seed.deserialize(&mut *self.deserializer)
     }
 }

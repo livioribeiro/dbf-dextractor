@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::io::{Read, Seek};
 use crate::error::{FieldParseError, NoSuchFieldError};
 use crate::dbf::{FieldInfo, Parser};
@@ -8,22 +7,20 @@ pub mod deserializer;
 pub mod enum_access;
 pub mod map_access;
 
-pub struct DbfDeserializer<'x, R: Read + Seek> {
+pub struct DbfDeserializer<R: Read + Seek> {
     fields: Vec<FieldInfo>,
     parser: Parser<R>,
     buffer: Vec<u8>,
     current_index: usize,
-    _marker: PhantomData<&'x ()>,
 }
 
-impl<'x, R: Read + Seek> DbfDeserializer<'x, R> {
+impl<R: Read + Seek> DbfDeserializer<R> {
     pub fn new(fields: Vec<FieldInfo>, record_length: usize, parser: Parser<R>) -> Self {
         Self {
             fields,
             parser,
             buffer: vec![0u8; record_length],
             current_index: 0,
-            _marker: PhantomData,
         }
     }
 

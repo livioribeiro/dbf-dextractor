@@ -6,7 +6,7 @@ use crate::value::Value;
 use super::{DbfDeserializer};
 use super::map_access::RecordReader;
 
-impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<'de, R> {
+impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<R> {
     type Error = DeserializeError;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>

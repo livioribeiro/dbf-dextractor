@@ -6,7 +6,7 @@ use super::DbfDeserializer;
 use crate::error::DeserializeError;
 use crate::value::Value;
 
-impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<'de, R> {
+impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R> {
     type Error = DeserializeError;
     type Variant = Self;
 
@@ -23,7 +23,7 @@ impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<'d
     }
 }
 
-impl<'a, 'de: 'a, R: Read + Seek> VariantAccess<'de> for &'a mut DbfDeserializer<'de, R> {
+impl<'a, 'de: 'a, R: Read + Seek> VariantAccess<'de> for &'a mut DbfDeserializer<R> {
     type Error = DeserializeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
