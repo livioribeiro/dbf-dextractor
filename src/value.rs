@@ -4,12 +4,9 @@ use serde::de::{Visitor, Error, Unexpected};
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Character(String),
-    Date(String),
-    Float(f64),
-    Numeric(f64),
-    Logical(bool),
-    Memo(String),
+    Str(String),
+    Num(f64),
+    Bool(bool),
     Null,
 }
 
@@ -19,12 +16,9 @@ impl Serialize for Value {
         S: Serializer,
     {
         match *self {
-            Value::Character(ref value) => serializer.serialize_str(value),
-            Value::Date(ref value) => serializer.serialize_str(value),
-            Value::Float(value) => serializer.serialize_f64(value),
-            Value::Logical(value) => serializer.serialize_bool(value),
-            Value::Numeric(value) => serializer.serialize_f64(value),
-            Value::Memo(ref value) => serializer.serialize_str(value),
+            Value::Str(ref value) => serializer.serialize_str(value),
+            Value::Num(value) => serializer.serialize_f64(value),
+            Value::Bool(value) => serializer.serialize_bool(value),
             Value::Null => serializer.serialize_none(),
         }
     }
@@ -43,42 +37,42 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         E: Error,
     {
-        Ok(Value::Logical(v))
+        Ok(Value::Bool(v))
     }
 
     fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(Value::Numeric(v as f64))
+        Ok(Value::Num(v as f64))
     }
 
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(Value::Numeric(v as f64))
+        Ok(Value::Num(v as f64))
     }
 
     fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(Value::Float(v))
+        Ok(Value::Num(v))
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(Value::Character(v.to_owned()))
+        Ok(Value::Str(v.to_owned()))
     }
 
     fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(Value::Character(v))
+        Ok(Value::Str(v))
     }
 
     fn visit_none<E>(self) -> Result<Self::Value, E>

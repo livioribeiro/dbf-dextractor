@@ -3,9 +3,15 @@ use serde::de::{Visitor, Error};
 
 #[derive(Debug, Clone)]
 pub struct Date {
-    year: u16,
-    month: u8,
-    day: u8,
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
+
+impl Date {
+    pub fn new(year: u16, month: u8, day: u8) -> Self {
+        Self { year, month, day }
+    }
 }
 
 impl From<(u8, u8, u8)> for Date {

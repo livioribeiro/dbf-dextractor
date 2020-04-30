@@ -3,9 +3,8 @@ use serde::de::IntoDeserializer;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 
 use super::DbfDeserializer;
-use crate::dbf::FieldType;
+use crate::dbf::{FieldType, FieldValue};
 use crate::error::DeserializeError;
-use crate::value::Value;
 
 impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R> {
     type Error = DeserializeError;
@@ -16,7 +15,7 @@ impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R>
         seed: V,
     ) -> Result<(V::Value, Self::Variant), Self::Error> {
         let value = match self.next_field()? {
-            Some(Value::Character(value)) => value,
+            Some(FieldValue::Character(value)) => value,
             _ => return Err(self.error_expected(FieldType::Character)),
         };
         seed.deserialize(value.into_deserializer())

@@ -107,6 +107,14 @@ impl DeserializeError {
         }
     }
 
+    pub fn unexpected_null<S: Into<String>>(record: usize, field: S) -> Self {
+        Self {
+            code: ErrorCode::UnexpectedNull,
+            record,
+            field: field.into(),
+        }
+    }
+
     pub fn expected_null<S: Into<String>>(record: usize, field: S) -> Self {
         Self {
             code: ErrorCode::ExpectedNull,
@@ -130,6 +138,7 @@ pub enum ErrorCode {
     Io(IoError),
     Expected(FieldType),
     TupleLength(usize, usize),
+    UnexpectedNull,
     ExpectedNull,
     NoSuchField,
     FieldParse,

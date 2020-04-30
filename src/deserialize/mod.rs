@@ -1,7 +1,6 @@
 use std::io::{Read, Seek};
 use crate::error::{DeserializeError, NoSuchFieldError};
 use crate::dbf::{FieldType, FieldInfo, FieldValue, MemoReader};
-use crate::value::Value;
 use crate::parser::parse_field;
 
 pub mod deserializer;
@@ -46,7 +45,11 @@ impl<R: Read + Seek> DbfDeserializer<R> {
         self.fields[self.current_index].name.as_ref()
     }
 
-    pub fn next_field(&mut self) -> Result<Option<Value>, DeserializeError> {
+    fn peek_field(&self) -> Option<&FieldType> {
+        self.fields.get(self.current_index).map(|f| &f.field_type)
+    }
+
+    pub fn next_field(&mut self) -> Result<Option<FieldValue>, DeserializeError> {
         if !self.has_next_field() {
             return Ok(None);
         }
@@ -54,25 +57,26 @@ impl<R: Read + Seek> DbfDeserializer<R> {
         let index = self.current_index;
         self.current_index += 1;
 
-        let value = match parse_field(&self.fields[index], &self.buffer)
-            .map_err(|_| self.error_field_parse())?
-        {
-            FieldValue::Character(v) => Value::Character(v),
-            FieldValue::Date(v) => Value::Date(v),
-            FieldValue::Float(v) => Value::Float(v),
-            FieldValue::Numeric(v) => Value::Numeric(v),
-            FieldValue::Logical(v) => Value::Logical(v),
-            FieldValue::Null => Value::Null,
-            FieldValue::Memo(v) => {
-                if let Some(r) = self.memo_reader.as_mut() {
-                    Value::Memo(r.read_memo(v)?)
-                } else {
-                    return Err(DeserializeError::missing_memo_file(self.record_count, self.current_field_name()))
-                }
-            }
-        };
+        // let value = match parse_field(&self.fields[index], &self.buffer)
+        //     .map_err(|_| self.error_field_parse())?
+        // {
+        //     FieldValue::Character(v) => Value::Character(v),
+        //     FieldValue::Date(v) => Value::Date(v.into()),
+        //     FieldValue::Float(v) => Value::Float(v),
+        //     FieldValue::Numeric(v) => Value::Numeric(v),
+        //     FieldValue::Logical(v) => Value::Logical(v),
+        //     FieldValue::Null => Value::Null,
+        //     FieldValue::Memo(v) => {
+        //         if let Some(r) = self.memo_reader.as_mut() {
+        //             Value::Memo(r.read_memo(v)?)
+        //         } else {
+        //             return Err(DeserializeError::missing_memo_file(self.record_count, self.current_field_name()))
+        //         }
+        //     }
+        // };
 
-        Ok(Some(value))
+        // Ok(Some(value))
+        parse_field(&self.fields[index], &self.buffer).map(Some).map_err(|_| self.error_field_parse())
     }
 
     pub fn is_next_field_null(&self) -> bool {
@@ -97,6 +101,10 @@ impl<R: Read + Seek> DbfDeserializer<R> {
         DeserializeError::expected(field_type, self.record_count, &self.fields[self.current_index - 1].name)
     }
 
+    fn error_unexpected_null(&self) -> DeserializeError {
+        DeserializeError::unexpected_null(self.record_count, &self.fields[self.current_index - 1].name)
+    }
+
     fn error_expected_null(&self) -> DeserializeError {
         DeserializeError::expected_null(self.record_count, &self.fields[self.current_index - 1].name)
     }
@@ -107,5 +115,9 @@ impl<R: Read + Seek> DbfDeserializer<R> {
 
     fn error_tuple_length(&self, length: usize) -> DeserializeError {
         DeserializeError::tuple_length(length, self.fields.len())
+    }
+
+    fn error_end_of_record(&self) -> DeserializeError {
+        DeserializeError::unexpected_end_of_record()
     }
 }

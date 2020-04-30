@@ -1,8 +1,7 @@
 use std::io::{Read, Seek};
 use serde::de::{Deserializer, Visitor};
 
-use crate::dbf::FieldType;
-use crate::value::Value;
+use crate::dbf::{FieldType, FieldValue};
 use crate::error::DeserializeError;
 use super::DbfDeserializer;
 use super::map_access::RecordReader;
@@ -14,14 +13,18 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     where
         V: Visitor<'de>,
     {
-        match self.next_field()? {
-            Some(Value::Character(value)) => visitor.visit_string(value),
-            Some(Value::Date(value)) => visitor.visit_string(value),
-            Some(Value::Float(value)) => visitor.visit_f64(value),
-            Some(Value::Logical(value)) => visitor.visit_bool(value),
-            Some(Value::Numeric(value)) => visitor.visit_f64(value),
-            Some(Value::Memo(value)) => visitor.visit_string(value),
-            Some(Value::Null) => visitor.visit_none(),
+        if self.is_next_field_null() {
+            self.current_index += 1;
+            return visitor.visit_none()
+        }
+
+        match self.peek_field() {
+            Some(FieldType::Character) => self.deserialize_string(visitor),
+            Some(FieldType::Date) => self.deserialize_string(visitor),
+            Some(FieldType::Float) => self.deserialize_f64(visitor),
+            Some(FieldType::Logical) => self.deserialize_bool(visitor),
+            Some(FieldType::Numeric) => self.deserialize_f64(visitor),
+            Some(FieldType::Memo) => self.deserialize_string(visitor),
             None => Err(DeserializeError::unexpected_end_of_record()),
         }
     }
@@ -31,8 +34,10 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Logical(value)) => visitor.visit_bool(value),
-            _ => Err(self.error_expected(FieldType::Logical)),
+            Some(FieldValue::Logical(value)) => visitor.visit_bool(value),
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Logical)),
+            None => Err(self.error_end_of_record()),
         }
     }
 
@@ -62,8 +67,10 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Numeric(value)) => visitor.visit_i64(value.trunc() as i64),
-            _ => Err(self.error_expected(FieldType::Numeric)),
+            Some(FieldValue::Numeric(value)) => visitor.visit_i64(value.trunc() as i64),
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Numeric)),
+            None => Err(self.error_end_of_record()),
         }
     }
 
@@ -93,9 +100,11 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Numeric(value)) if value < 0.0 => Err(self.error_field_parse()),
-            Some(Value::Numeric(value)) => visitor.visit_u64(value.trunc() as u64),
-            _ => Err(self.error_expected(FieldType::Numeric))
+            Some(FieldValue::Numeric(value)) if value < 0.0 => Err(self.error_field_parse()),
+            Some(FieldValue::Numeric(value)) => visitor.visit_u64(value.trunc() as u64),
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Numeric)),
+            None => Err(self.error_end_of_record()),
         }
     }
 
@@ -111,8 +120,10 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Float(value)) | Some(Value::Numeric(value)) => visitor.visit_f64(value),
-            _ => Err(self.error_expected(FieldType::Float)),
+            Some(FieldValue::Float(value)) | Some(FieldValue::Numeric(value)) => visitor.visit_f64(value),
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Float)),
+            None => Err(self.error_end_of_record()),
         }
     }
 
@@ -121,9 +132,11 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Character(value)) if value.len() != 1 => Err(self.error_field_parse()),
-            Some(Value::Character(value)) =>  visitor.visit_char(value.chars().next().unwrap()), // dbase uses only ascii
-            _ => Err(self.error_expected(FieldType::Logical))
+            Some(FieldValue::Character(value)) if value.len() != 1 => Err(self.error_field_parse()),
+            Some(FieldValue::Character(value)) =>  visitor.visit_char(value.chars().next().unwrap()), // dbase uses only ascii
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Character)),
+            None => Err(self.error_end_of_record()),
         }
     }
 
@@ -139,8 +152,19 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
         V: Visitor<'de>,
     {
         match self.next_field()? {
-            Some(Value::Character(value)) | Some(Value::Date(value)) => visitor.visit_string(value),
-            _ => Err(self.error_expected(FieldType::Character)),
+            Some(FieldValue::Character(value)) => visitor.visit_string(value),
+            Some(FieldValue::Date(value)) => visitor.visit_string(value),
+            Some(FieldValue::Memo(value)) => {
+                if let Some(r) = self.memo_reader.as_mut() {
+                    let value = r.read_memo(value)?;
+                    visitor.visit_string(value)
+                } else {
+                    Err(DeserializeError::missing_memo_file(self.record_count, self.current_field_name()))
+                }
+            },
+            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
+            Some(_) => Err(self.error_expected(FieldType::Character)),
+            None => Err(self.error_end_of_record()),
         }
     }
 

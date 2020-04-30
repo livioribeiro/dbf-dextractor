@@ -80,6 +80,7 @@ impl FieldInfo {
     }
 }
 
+#[derive(Debug)]
 pub enum FieldValue {
     Character(String),
     Date(String),
