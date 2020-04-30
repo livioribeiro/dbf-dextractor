@@ -1,6 +1,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 use std::io::Error as IoError;
+
 use serde::export::Formatter;
 
 use crate::dbf::FieldType;
@@ -75,11 +76,11 @@ pub struct DeserializeError {
 }
 
 impl DeserializeError {
-    pub fn missing_memo_file<S: Into<String>>(record: usize, field: S) -> Self {
+    pub fn missing_memo_file() -> Self {
         Self {
             code: ErrorCode::MissingMemoFile,
-            record,
-            field: field.into()
+            record: 0,
+            field: "".to_owned(),
         }
     }
 
@@ -156,7 +157,8 @@ impl std::error::Error for DeserializeError {}
 
 impl serde::de::Error for DeserializeError {
     fn custom<T>(msg: T) -> Self
-    where T: fmt::Display,
+    where
+        T: fmt::Display,
     {
         Self {
             code: ErrorCode::Custom(msg.to_string()),

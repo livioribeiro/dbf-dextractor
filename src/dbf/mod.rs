@@ -1,11 +1,11 @@
-mod header;
-mod version;
-mod reader;
 mod field;
+mod header;
 mod memo;
+mod reader;
+mod version;
 
+pub use field::{FieldInfo, FieldType, FieldValue};
 pub use header::Header;
-pub use version::Version;
-pub use reader::{DbfReader, RecordIterator};
-pub use field::{FieldValue, FieldInfo, FieldType};
 pub use memo::MemoReader;
+pub use reader::{DbfReader, RecordIterator};
+pub use version::Version;

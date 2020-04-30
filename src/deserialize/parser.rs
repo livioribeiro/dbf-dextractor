@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 use std::num::ParseFloatError;
 
-use crate::dbf::{FieldType, FieldInfo};
 use crate::dbf::FieldValue;
+use crate::dbf::{FieldInfo, FieldType};
 use crate::error::FieldParseError;
 
 fn parse_character(buf: &[u8]) -> FieldValue {
@@ -35,7 +35,10 @@ fn parse_memo(buf: &[u8]) -> Result<FieldValue, FieldParseError> {
     let offset = if buf.len() == 4 {
         u32::from_le_bytes(buf.try_into().expect("parse memo field"))
     } else {
-        String::from_utf8_lossy(buf).trim().parse().expect("parse memo field")
+        String::from_utf8_lossy(buf)
+            .trim()
+            .parse()
+            .expect("parse memo field")
     };
 
     Ok(FieldValue::Memo(offset))
@@ -55,7 +58,7 @@ pub fn parse_field(field: &FieldInfo, record_buf: &[u8]) -> Result<FieldValue, F
     let buf = &record_buf[start..end];
 
     if buf.iter().all(|b| *b == b' ') {
-        return Ok(FieldValue::Null)
+        return Ok(FieldValue::Null);
     }
 
     let map_e = |_| FieldParseError::new(field.name.clone(), field.field_type.clone());

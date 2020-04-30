@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::de::{Visitor, Error};
+use serde::de::{Error, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone)]
 pub struct Date {
@@ -37,9 +37,12 @@ impl From<String> for Date {
 impl Serialize for Date {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
-        serializer.serialize_str(&format!("{:04}-{:02}-{:02}", self.year, self.month, self.day))
+        serializer.serialize_str(&format!(
+            "{:04}-{:02}-{:02}",
+            self.year, self.month, self.day
+        ))
     }
 }
 

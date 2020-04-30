@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::io::Read;
+
 use byteorder::{LittleEndian, ReadBytesExt};
 
 use super::version::Version;

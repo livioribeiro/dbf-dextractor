@@ -1,6 +1,7 @@
 use std::fmt;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::de::{Visitor, Error, Unexpected};
+
+use serde::de::{Error, Unexpected, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -86,9 +87,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         D: Deserializer<'de>,
     {
-        match deserializer.deserialize_option(ValueVisitor{})? {
+        match deserializer.deserialize_option(ValueVisitor {})? {
             Value::Null => Err(Error::invalid_type(Unexpected::Option, &self)),
-            value => Ok(value)
+            value => Ok(value),
         }
     }
 
@@ -103,8 +104,8 @@ impl<'de> Visitor<'de> for ValueVisitor {
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(ValueVisitor{})
+        deserializer.deserialize_any(ValueVisitor {})
     }
 }

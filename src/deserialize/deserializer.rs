@@ -1,318 +1,139 @@
 use std::io::{Read, Seek};
-use serde::de::{Deserializer, Visitor};
 
-use crate::dbf::{FieldType, FieldValue};
-use crate::error::DeserializeError;
-use super::DbfDeserializer;
-use super::map_access::RecordReader;
+use crate::dbf::{FieldInfo, FieldType, FieldValue, MemoReader};
+use crate::error::{DeserializeError, NoSuchFieldError};
+use super::parser::parse_field;
 
-impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<R> {
-    type Error = DeserializeError;
+pub struct DbfDeserializer<R: Read + Seek> {
+    fields: Vec<FieldInfo>,
+    buffer: Vec<u8>,
+    current_index: usize,
+    record_count: usize,
+    memo_reader: Option<MemoReader<R>>,
+}
 
-    fn deserialize_any<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        if self.is_next_field_null() {
-            self.current_index += 1;
-            return visitor.visit_none()
-        }
-
-        match self.peek_field() {
-            Some(FieldType::Character) => self.deserialize_string(visitor),
-            Some(FieldType::Date) => self.deserialize_string(visitor),
-            Some(FieldType::Float) => self.deserialize_f64(visitor),
-            Some(FieldType::Logical) => self.deserialize_bool(visitor),
-            Some(FieldType::Numeric) => self.deserialize_f64(visitor),
-            Some(FieldType::Memo) => self.deserialize_string(visitor),
-            None => Err(DeserializeError::unexpected_end_of_record()),
+impl<R: Read + Seek> DbfDeserializer<R> {
+    pub fn new(
+        fields: Vec<FieldInfo>,
+        record_length: usize,
+        memo_reader: Option<MemoReader<R>>,
+    ) -> Self {
+        Self {
+            fields,
+            buffer: vec![0u8; record_length],
+            current_index: 0,
+            record_count: 0,
+            memo_reader,
         }
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Logical(value)) => visitor.visit_bool(value),
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Logical)),
-            None => Err(self.error_end_of_record()),
+    pub fn fields(&self) -> &Vec<FieldInfo> {
+        &self.fields
+    }
+
+    pub fn buffer(&mut self) -> &mut [u8] {
+        &mut self.buffer
+    }
+
+    pub fn memo_reader(&mut self) -> Option<&mut MemoReader<R>> {
+        self.memo_reader.as_mut()
+    }
+
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+
+    pub fn reset_buffer(&mut self) {
+        for i in 0..self.buffer.len() {
+            self.buffer[i] = 0;
         }
     }
 
-    fn deserialize_i8<V>(self, _isitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
+    pub fn reset_index(&mut self) {
+        self.current_index = 0;
+        self.record_count += 1;
     }
 
-    fn deserialize_i16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
+    pub fn incr_index(&mut self) {
+        self.current_index += 1;
     }
 
-    fn deserialize_i32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
+    pub fn current_field_name(&self) -> &str {
+        self.fields[self.current_index].name.as_ref()
     }
 
-    fn deserialize_i64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Numeric(value)) => visitor.visit_i64(value.trunc() as i64),
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Numeric)),
-            None => Err(self.error_end_of_record()),
-        }
+    pub fn peek_field(&self) -> Option<&FieldType> {
+        self.fields.get(self.current_index).map(|f| &f.field_type)
     }
 
-    fn deserialize_u8<V>(self, _isitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_u16<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_u32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_u64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Numeric(value)) if value < 0.0 => Err(self.error_field_parse()),
-            Some(FieldValue::Numeric(value)) => visitor.visit_u64(value.trunc() as u64),
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Numeric)),
-            None => Err(self.error_end_of_record()),
-        }
-    }
-
-    fn deserialize_f32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_f64<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Float(value)) | Some(FieldValue::Numeric(value)) => visitor.visit_f64(value),
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Float)),
-            None => Err(self.error_end_of_record()),
-        }
-    }
-
-    fn deserialize_char<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Character(value)) if value.len() != 1 => Err(self.error_field_parse()),
-            Some(FieldValue::Character(value)) =>  visitor.visit_char(value.chars().next().unwrap()), // dbase uses only ascii
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Character)),
-            None => Err(self.error_end_of_record()),
-        }
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
-    }
-
-    fn deserialize_string<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next_field()? {
-            Some(FieldValue::Character(value)) => visitor.visit_string(value),
-            Some(FieldValue::Date(value)) => visitor.visit_string(value),
-            Some(FieldValue::Memo(value)) => {
-                if let Some(r) = self.memo_reader.as_mut() {
-                    let value = r.read_memo(value)?;
-                    visitor.visit_string(value)
-                } else {
-                    Err(DeserializeError::missing_memo_file(self.record_count, self.current_field_name()))
-                }
-            },
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Character)),
-            None => Err(self.error_end_of_record()),
-        }
-    }
-
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_option<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        if self.is_next_field_null() {
-            self.current_index += 1;
-            return visitor.visit_none();
+    pub fn next_field(&mut self) -> Result<Option<FieldValue>, DeserializeError> {
+        if !self.has_next_field() {
+            return Ok(None);
         }
 
-        visitor.visit_some(self)
+        let index = self.current_index;
+        self.current_index += 1;
+
+        parse_field(&self.fields[index], &self.buffer)
+            .map(Some)
+            .map_err(|_| self.error_field_parse())
     }
 
-    fn deserialize_unit<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        if self.is_next_field_null() {
-            self.current_index += 1;
-            return visitor.visit_unit();
-        }
-
-        Err(self.error_expected_null())
+    pub fn is_next_field_null(&self) -> bool {
+        super::parser::check_null(&self.fields[self.current_index], &self.buffer)
     }
 
-    fn deserialize_unit_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_unit(visitor)
+    pub fn field_index(&self, name: &str) -> Option<usize> {
+        self.fields.iter().position(|f| f.name == name)
     }
 
-    fn deserialize_newtype_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_newtype_struct(self)
+    pub fn set_field_with_name(&mut self, name: &str) -> Result<(), NoSuchFieldError> {
+        let index = self
+            .field_index(name)
+            .ok_or_else(|| NoSuchFieldError::new(name))?;
+        self.current_index = index;
+        Ok(())
     }
 
-    fn deserialize_seq<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
+    pub fn has_next_field(&self) -> bool {
+        self.current_index < self.fields.len()
     }
 
-    fn deserialize_tuple<V>(
-        self,
-        len: usize,
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        let record_length = self.fields.len();
-        if len > record_length {
-            return Err(self.error_tuple_length(len))
-        }
-        self.deserialize_seq(visitor)
+    pub fn error_expected(&self, field_type: FieldType) -> DeserializeError {
+        DeserializeError::expected(
+            field_type,
+            self.record_count,
+            &self.fields[self.current_index - 1].name,
+        )
     }
 
-    fn deserialize_tuple_struct<V>(
-        self,
-        _name: &'static str,
-        len: usize,
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_tuple(len, visitor)
+    pub fn error_unexpected_null(&self) -> DeserializeError {
+        DeserializeError::unexpected_null(
+            self.record_count,
+            &self.fields[self.current_index - 1].name,
+        )
     }
 
-    fn deserialize_map<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        let fields: Vec<_> = self.fields.iter().map(|f| f.name.to_owned()).collect();
-        let fields: Vec<_> = fields.iter().map(|f| f.as_ref()).collect();
-        visitor.visit_map(&mut RecordReader::new(self, &fields))
+    pub fn error_expected_null(&self) -> DeserializeError {
+        DeserializeError::expected_null(
+            self.record_count,
+            &self.fields[self.current_index - 1].name,
+        )
     }
 
-    fn deserialize_struct<V>(
-        self,
-        _name: &'static str,
-        fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_map(RecordReader::new(self, fields))
+    pub fn error_field_parse(&self) -> DeserializeError {
+        DeserializeError::field_parse(self.record_count, &self.fields[self.current_index - 1].name)
     }
 
-    fn deserialize_enum<V>(
-        self,
-        _name: &'static str,
-        _variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_enum(self)
+    pub fn error_tuple_length(&self, length: usize) -> DeserializeError {
+        DeserializeError::tuple_length(length, self.fields.len())
     }
 
-    fn deserialize_identifier<V>(
-        self,
-        _visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
+    pub fn error_end_of_record(&self) -> DeserializeError {
+        DeserializeError::unexpected_end_of_record()
     }
 
-    fn deserialize_ignored_any<V>(
-        self,
-        visitor: V,
-    ) -> Result<<V as Visitor<'de>>::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.next_field()?;
-        visitor.visit_unit()
+    pub fn error_missing_memo_file(&self) -> DeserializeError {
+        DeserializeError::missing_memo_file()
     }
 }

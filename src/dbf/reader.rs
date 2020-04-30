@@ -4,10 +4,10 @@ use std::marker::PhantomData;
 
 use serde::de::DeserializeOwned;
 
+use super::memo::MemoReader;
+use super::{FieldInfo, Header};
 use crate::deserialize::DbfDeserializer;
 use crate::error::UnsupportedFieldTypeError;
-use super::{FieldInfo, Header};
-use super::memo::MemoReader;
 
 pub struct DbfReader<R: Read + Seek> {
     reader: R,
@@ -51,10 +51,16 @@ impl<'a, R: Read + Seek> DbfReader<R> {
         };
 
         let record_length = header.record_length;
-        let memo_reader_opt = memo_reader.map(|r| MemoReader::from_reader(r, header.version)).transpose()?;
+        let memo_reader_opt = memo_reader
+            .map(|r| MemoReader::from_reader(r, header.version))
+            .transpose()?;
         let deserializer = DbfDeserializer::new(fields, record_length, memo_reader_opt);
 
-        Ok(Self { reader, header, deserializer })
+        Ok(Self {
+            reader,
+            header,
+            deserializer,
+        })
     }
 
     pub fn header(&self) -> &Header {
@@ -79,12 +85,16 @@ impl<'a, R: Read + Seek> DbfReader<R> {
         }
     }
 
-    pub fn read_record<T: DeserializeOwned>(&mut self) -> Result<Option<T>, Box<dyn std::error::Error>> {
+    pub fn read_record<T: DeserializeOwned>(
+        &mut self,
+    ) -> Result<Option<T>, Box<dyn std::error::Error>> {
         if self.next_record()?.is_none() {
-            return Ok(None)
+            return Ok(None);
         }
 
-        T::deserialize(&mut self.deserializer).map(Some).map_err(From::from)
+        T::deserialize(&mut self.deserializer)
+            .map(Some)
+            .map_err(From::from)
     }
 
     pub fn records<T>(self) -> RecordIterator<R, T>
@@ -95,7 +105,6 @@ impl<'a, R: Read + Seek> DbfReader<R> {
     }
 }
 
-
 pub struct RecordIterator<R, T>
 where
     R: Read + Seek,
@@ -105,11 +114,11 @@ where
     _type: PhantomData<T>,
 }
 
-impl<R: Read + Seek, T: DeserializeOwned> RecordIterator<R, T>
-{
+impl<R: Read + Seek, T: DeserializeOwned> RecordIterator<R, T> {
     pub fn new(parser: DbfReader<R>) -> Self {
         Self {
-            parser, _type: PhantomData
+            parser,
+            _type: PhantomData,
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::io::{Read, Seek};
+
 use serde::de::IntoDeserializer;
 use serde::de::{DeserializeSeed, MapAccess};
 
@@ -35,7 +36,8 @@ impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, R> {
             return Ok(None);
         }
 
-        seed.deserialize(self.fields[self.index].into_deserializer()).map(Some)
+        seed.deserialize(self.fields[self.index].into_deserializer())
+            .map(Some)
     }
 
     fn next_value_seed<V>(
@@ -45,7 +47,8 @@ impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, R> {
     where
         V: DeserializeSeed<'de>,
     {
-        self.deserializer.set_field_with_name(self.fields[self.index])?;
+        self.deserializer
+            .set_field_with_name(self.fields[self.index])?;
         self.index += 1;
         seed.deserialize(&mut *self.deserializer)
     }
