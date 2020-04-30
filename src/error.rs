@@ -1,6 +1,7 @@
-use serde::export::Formatter;
 use std::error::Error as StdError;
 use std::fmt;
+use std::io::Error as IoError;
+use serde::export::Formatter;
 
 use crate::dbf::FieldType;
 
@@ -17,21 +18,18 @@ impl StdError for UnsupportedFieldTypeError {}
 
 #[derive(Debug)]
 pub struct FieldParseError {
-    field: String,
-    value: String,
+    field_name: String,
     field_type: FieldType,
 }
 
 impl FieldParseError {
-    pub fn new<S>(field: S, value: S, field_type: FieldType) -> Self
+    pub fn new<S>(field_name: S, field_type: FieldType) -> Self
     where
         S: Into<String>,
-        // V: Into<Vec<u8>>,
     {
         Self {
+            field_name: field_name.into(),
             field_type,
-            field: field.into(),
-            value: value.into(),
         }
     }
 }
@@ -40,8 +38,8 @@ impl fmt::Display for FieldParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "Field '{}' ({}) could not be parsed from '{:?}'",
-            self.field, self.field_type, self.value
+            "Field '{}' ({}) could not be parsed'",
+            self.field_name, self.field_type
         )
     }
 }
@@ -63,7 +61,7 @@ impl NoSuchFieldError {
 
 impl fmt::Display for NoSuchFieldError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "Field not found: {}", self.field)
+        write!(f, "Field '{}' does not exist", self.field)
     }
 }
 
@@ -71,43 +69,100 @@ impl StdError for NoSuchFieldError {}
 
 #[derive(Debug)]
 pub struct DeserializeError {
-    message: String,
-    source: Option<Box<dyn StdError>>,
+    code: ErrorCode,
+    record: usize,
+    field: String,
+}
+
+impl DeserializeError {
+    pub fn missing_memo_file<S: Into<String>>(record: usize, field: S) -> Self {
+        Self {
+            code: ErrorCode::MissingMemoFile,
+            record,
+            field: field.into()
+        }
+    }
+
+    pub fn field_parse<S: Into<String>>(record: usize, field: S) -> Self {
+        Self {
+            code: ErrorCode::FieldParse,
+            record,
+            field: field.into(),
+        }
+    }
+
+    pub fn unexpected_end_of_record() -> Self {
+        Self {
+            code: ErrorCode::UnexpectedEndOfRecord,
+            record: 0,
+            field: "".to_owned(),
+        }
+    }
+
+    pub fn expected<S: Into<String>>(field_type: FieldType, record: usize, field: S) -> Self {
+        Self {
+            code: ErrorCode::Expected(field_type),
+            record,
+            field: field.into(),
+        }
+    }
+
+    pub fn expected_null<S: Into<String>>(record: usize, field: S) -> Self {
+        Self {
+            code: ErrorCode::ExpectedNull,
+            record,
+            field: field.into(),
+        }
+    }
+
+    pub fn tuple_length(length: usize, record: usize) -> Self {
+        Self {
+            code: ErrorCode::TupleLength(length, record),
+            record: 0,
+            field: "".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ErrorCode {
+    Custom(String),
+    Io(IoError),
+    Expected(FieldType),
+    TupleLength(usize, usize),
+    ExpectedNull,
+    NoSuchField,
+    FieldParse,
+    MissingMemoFile,
+    UnexpectedEndOfRecord,
 }
 
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Deserialize Error: {}", self.message)
+        write!(f, "Deserialize error at {}:{}", self.field, self.record)
     }
 }
 
 impl std::error::Error for DeserializeError {}
+
 impl serde::de::Error for DeserializeError {
     fn custom<T>(msg: T) -> Self
-    where
-        T: fmt::Display,
+    where T: fmt::Display,
     {
         Self {
-            message: format!("{}", msg),
-            source: None,
+            code: ErrorCode::Custom(msg.to_string()),
+            record: 0,
+            field: "".to_owned(),
         }
     }
 }
 
-impl<S: Into<String>> From<S> for DeserializeError {
-    fn from(e: S) -> Self {
+impl From<IoError> for DeserializeError {
+    fn from(e: IoError) -> Self {
         Self {
-            message: e.into(),
-            source: None,
-        }
-    }
-}
-
-impl From<FieldParseError> for DeserializeError {
-    fn from(e: FieldParseError) -> Self {
-        Self {
-            message: format!("failed to parse field {}", &e.field),
-            source: Some(e.into()),
+            code: ErrorCode::Io(e),
+            record: 0,
+            field: "".to_owned(),
         }
     }
 }
@@ -115,8 +170,9 @@ impl From<FieldParseError> for DeserializeError {
 impl From<NoSuchFieldError> for DeserializeError {
     fn from(e: NoSuchFieldError) -> Self {
         Self {
-            message: format!("no field with name {}", &e.field),
-            source: Some(e.into()),
+            code: ErrorCode::NoSuchField,
+            record: 0,
+            field: e.field,
         }
     }
 }

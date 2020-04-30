@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 
 mod dbf;
 mod deserialize;
+mod parser;
 mod model;
 mod value;
 mod error;

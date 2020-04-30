@@ -6,7 +6,6 @@ use serde::de::DeserializeOwned;
 
 use crate::deserialize::DbfDeserializer;
 use crate::error::UnsupportedFieldTypeError;
-use super::Parser;
 use super::{FieldInfo, Header};
 use super::memo::MemoReader;
 
@@ -52,11 +51,8 @@ impl<'a, R: Read + Seek> DbfReader<R> {
         };
 
         let record_length = header.record_length;
-
-        let memo_reader_opt = memo_reader.map(MemoReader::from_reader).transpose()?;
-        let parser = Parser::new(memo_reader_opt);
-
-        let deserializer = DbfDeserializer::new(fields, record_length, parser);
+        let memo_reader_opt = memo_reader.map(|r| MemoReader::from_reader(r, header.version)).transpose()?;
+        let deserializer = DbfDeserializer::new(fields, record_length, memo_reader_opt);
 
         Ok(Self { reader, header, deserializer })
     }

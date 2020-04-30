@@ -1,9 +1,10 @@
 use std::io::{Read, Seek};
 use serde::de::{Deserializer, Visitor};
 
-use crate::error::DeserializeError;
+use crate::dbf::FieldType;
 use crate::value::Value;
-use super::{DbfDeserializer};
+use crate::error::DeserializeError;
+use super::DbfDeserializer;
 use super::map_access::RecordReader;
 
 impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<R> {
@@ -21,7 +22,7 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
             Some(Value::Numeric(value)) => visitor.visit_f64(value),
             Some(Value::Memo(value)) => visitor.visit_string(value),
             Some(Value::Null) => visitor.visit_none(),
-            None => Err("record out of bounds".into()),
+            None => Err(DeserializeError::unexpected_end_of_record()),
         }
     }
 
@@ -29,11 +30,10 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     where
         V: Visitor<'de>,
     {
-        if let Some(Value::Logical(value)) = self.next_field()? {
-            return visitor.visit_bool(value);
+        match self.next_field()? {
+            Some(Value::Logical(value)) => visitor.visit_bool(value),
+            _ => Err(self.error_expected(FieldType::Logical)),
         }
-
-        Err("invalid boolean".into())
     }
 
     fn deserialize_i8<V>(self, _isitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -61,11 +61,10 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     where
         V: Visitor<'de>,
     {
-        if let Some(Value::Numeric(value)) = self.next_field()? {
-            return visitor.visit_i64(value.trunc() as i64);
+        match self.next_field()? {
+            Some(Value::Numeric(value)) => visitor.visit_i64(value.trunc() as i64),
+            _ => Err(self.error_expected(FieldType::Numeric)),
         }
-
-        Err("invalid number".into())
     }
 
     fn deserialize_u8<V>(self, _isitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -93,14 +92,11 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     where
         V: Visitor<'de>,
     {
-        if let Some(Value::Numeric(value)) = self.next_field()? {
-            if value < 0.0 {
-                return Err("negative value".into());
-            }
-            return visitor.visit_u64(value.trunc() as u64);
+        match self.next_field()? {
+            Some(Value::Numeric(value)) if value < 0.0 => Err(self.error_field_parse()),
+            Some(Value::Numeric(value)) => visitor.visit_u64(value.trunc() as u64),
+            _ => Err(self.error_expected(FieldType::Numeric))
         }
-
-        Err("invalid number".into())
     }
 
     fn deserialize_f32<V>(self, _visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -116,7 +112,7 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     {
         match self.next_field()? {
             Some(Value::Float(value)) | Some(Value::Numeric(value)) => visitor.visit_f64(value),
-            _ => Err("invalid float".into()),
+            _ => Err(self.error_expected(FieldType::Float)),
         }
     }
 
@@ -124,14 +120,11 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     where
         V: Visitor<'de>,
     {
-        if let Some(Value::Character(value)) = self.next_field()? {
-            if value.len() != 1 {
-                return Err("char length must be 1".into());
-            }
-            return visitor.visit_char(value.chars().next().unwrap()); // dbase uses only ascii
+        match self.next_field()? {
+            Some(Value::Character(value)) if value.len() != 1 => Err(self.error_field_parse()),
+            Some(Value::Character(value)) =>  visitor.visit_char(value.chars().next().unwrap()), // dbase uses only ascii
+            _ => Err(self.error_expected(FieldType::Logical))
         }
-
-        Err("invalid char".into())
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<<V as Visitor<'de>>::Value, Self::Error>
@@ -147,7 +140,7 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     {
         match self.next_field()? {
             Some(Value::Character(value)) | Some(Value::Date(value)) => visitor.visit_string(value),
-            _ => Err("invalid string".into()),
+            _ => Err(self.error_expected(FieldType::Character)),
         }
     }
 
@@ -186,7 +179,7 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
             return visitor.visit_unit();
         }
 
-        Err("expected null".into())
+        Err(self.error_expected_null())
     }
 
     fn deserialize_unit_struct<V>(
@@ -228,11 +221,7 @@ impl<'a, 'de: 'a, R: Read + Seek> Deserializer<'de> for &'a mut DbfDeserializer<
     {
         let record_length = self.fields.len();
         if len > record_length {
-            return Err(format!(
-                "tuple length ({}) greater then record length ({})",
-                len, record_length
-            )
-            .into());
+            return Err(self.error_tuple_length(len))
         }
         self.deserialize_seq(visitor)
     }

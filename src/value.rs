@@ -92,7 +92,6 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         D: Deserializer<'de>,
     {
-        dbg!("1");
         match deserializer.deserialize_option(ValueVisitor{})? {
             Value::Null => Err(Error::invalid_type(Unexpected::Option, &self)),
             value => Ok(value)
@@ -110,9 +109,8 @@ impl<'de> Visitor<'de> for ValueVisitor {
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de> {
-
-    deserializer.deserialize_any(ValueVisitor{})
-
+        D: Deserializer<'de>
+    {
+        deserializer.deserialize_any(ValueVisitor{})
     }
 }

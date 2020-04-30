@@ -47,9 +47,6 @@ impl<'a, 'de: 'a, R: Read + Seek> MapAccess<'de> for RecordReader<'a, R> {
     {
         self.deserializer.set_field_with_name(self.fields[self.index])?;
         self.index += 1;
-        // seed.deserialize(unsafe {
-        //     std::mem::transmute::<&mut DbfDeserializer<R>, &'de mut DbfDeserializer<R>>(&mut *self.deserializer)
-        // })
         seed.deserialize(&mut *self.deserializer)
     }
 }
