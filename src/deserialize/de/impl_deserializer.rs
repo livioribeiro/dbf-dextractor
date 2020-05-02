@@ -20,7 +20,7 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
         match self.peek_field() {
             Some(FieldType::Logical) => self.deserialize_bool(visitor),
             Some(FieldType::Character) => self.deserialize_string(visitor),
-            Some(FieldType::Integer) => self.deserialize_i32(visitor),
+            Some(FieldType::Integer) => self.deserialize_i64(visitor),
             Some(FieldType::Numeric) => self.deserialize_f64(visitor),
             Some(FieldType::Float) => self.deserialize_f64(visitor),
             Some(FieldType::Date) => self.deserialize_seq(visitor),
@@ -44,30 +44,25 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
         }
     }
 
-    fn deserialize_i8<V>(self, _isitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_i64(visitor)
     }
 
-    fn deserialize_i16<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_i64(visitor)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.next_value() {
-            Some(FieldValue::Integer(value)) => visitor.visit_i32(value),
-            Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Integer)),
-            None => Err(self.error_end_of_record()),
-        }
+        self.deserialize_i64(visitor)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -75,32 +70,36 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
         V: Visitor<'de>,
     {
         match self.next_value() {
+            Some(FieldValue::Integer(value)) => visitor.visit_i32(value),
+            Some(FieldValue::Numeric(value)) if value.fract() != 0.0 => {
+                Err(self.error_field_parse())
+            }
             Some(FieldValue::Numeric(value)) => visitor.visit_i64(value.trunc() as i64),
             Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Numeric)),
+            Some(_) => Err(self.error_expected(FieldType::Integer)),
             None => Err(self.error_end_of_record()),
         }
     }
 
-    fn deserialize_u8<V>(self, _isitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_u64(visitor)
     }
 
-    fn deserialize_u16<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_u64(visitor)
     }
 
-    fn deserialize_u32<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_u64(visitor)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -108,19 +107,24 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
         V: Visitor<'de>,
     {
         match self.next_value() {
+            Some(FieldValue::Integer(value)) if value < 0 => Err(self.error_field_parse()),
+            Some(FieldValue::Integer(value)) => visitor.visit_u32(value as u32),
             Some(FieldValue::Numeric(value)) if value < 0.0 => Err(self.error_field_parse()),
+            Some(FieldValue::Numeric(value)) if value.fract() != 0.0 => {
+                Err(self.error_field_parse())
+            }
             Some(FieldValue::Numeric(value)) => visitor.visit_u64(value.trunc() as u64),
             Some(FieldValue::Null) => Err(self.error_unexpected_null()),
-            Some(_) => Err(self.error_expected(FieldType::Numeric)),
+            Some(_) => Err(self.error_expected(FieldType::Integer)),
             None => Err(self.error_end_of_record()),
         }
     }
 
-    fn deserialize_f32<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_f64(visitor)
     }
 
     fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -143,7 +147,7 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
     {
         match self.next_value() {
             Some(FieldValue::Character(value)) if value.len() != 1 => Err(self.error_field_parse()),
-            Some(FieldValue::Character(value)) => visitor.visit_char(value.chars().next().unwrap()), // dbase uses only ascii
+            Some(FieldValue::Character(value)) => visitor.visit_char(value.chars().next().unwrap()),
             Some(FieldValue::Null) => Err(self.error_unexpected_null()),
             Some(_) => Err(self.error_expected(FieldType::Character)),
             None => Err(self.error_end_of_record()),
@@ -171,11 +175,11 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
         }
     }
 
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_byte_buf(visitor)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -249,9 +253,7 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
             Some(FieldValue::Timestamp(year, month, day, hour, minute, second)) => {
                 visitor.visit_seq(TimestampAccess::new(year, month, day, hour, minute, second))
             }
-            Some(_) => {
-                Err(self.error_expected(FieldType::Date))
-            }
+            Some(_) => Err(self.error_expected(FieldType::Date)),
             None => Err(self.error_unexpected_null()),
         }
     }
