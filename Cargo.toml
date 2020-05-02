@@ -1,8 +1,13 @@
 [package]
 name = "dbf_dextractor"
 version = "0.1.0"
-authors = ["livio"]
+authors = ["Livio Ribeiro <livioribeiro@outlook.com>"]
 edition = "2018"
+description = "Extract and deserialize dbf files"
+repository = "https://github.com/livioribeiro/dbf-dextractor"
+readme = "README.md"
+keywords = ["dbase", "dbf", "parser", "serde"]
+categories = ["encoding", "parser-implementations"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
