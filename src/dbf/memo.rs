@@ -32,7 +32,7 @@ impl<R: Read + Seek> MemoReader<R> {
         })
     }
 
-    pub fn read_memo(&mut self, index: u32) -> Result<String, IoError> {
+    pub fn read_memo(&mut self, index: u32) -> Result<Vec<u8>, IoError> {
         let offset = index as u64 * self.block_size as u64;
         self.reader.seek(SeekFrom::Start(offset))?;
 
@@ -55,21 +55,21 @@ impl<R: Read + Seek> MemoReader<R> {
                     .iter()
                     .position(|b| *b == 0x1a)
                     .unwrap_or_else(|| buf.len());
-                Ok(String::from_utf8_lossy(&buf[..end]).into_owned())
+                Ok(buf[..end].to_owned())
             }
             Version::DBase4 => {
                 self.reader.seek(SeekFrom::Current(4))?; // reserved bytes
                 let length = self.reader.read_u32::<LittleEndian>()?;
                 let mut buf = vec![0u8; length as usize];
                 self.reader.read_exact(&mut buf)?;
-                Ok(String::from_utf8_lossy(&buf).into_owned())
+                Ok(buf)
             }
             Version::FoxBase | Version::VisualFoxPro | Version::FoxPro2 => {
                 self.reader.seek(SeekFrom::Current(4))?; // reserved bytes
                 let length = self.reader.read_u32::<BigEndian>()?;
                 let mut buf = vec![0u8; length as usize];
                 self.reader.read_exact(&mut buf)?;
-                Ok(String::from_utf8_lossy(&buf).into_owned())
+                Ok(buf)
             }
         }
     }

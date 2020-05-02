@@ -1,13 +1,12 @@
-use std::io::{Read, Seek};
+use serde::de::{
+    DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, VariantAccess, Visitor,
+};
 
-use serde::de::IntoDeserializer;
-use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
-
-use super::DbfDeserializer;
 use crate::dbf::{FieldType, FieldValue};
+use crate::deserialize::DbfDeserializer;
 use crate::error::DeserializeError;
 
-impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R> {
+impl<'a, 'de: 'a> EnumAccess<'de> for &'a mut DbfDeserializer {
     type Error = DeserializeError;
     type Variant = Self;
 
@@ -15,7 +14,7 @@ impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R>
         self,
         seed: V,
     ) -> Result<(V::Value, Self::Variant), Self::Error> {
-        let value = match self.next_field()? {
+        let value = match self.next_value() {
             Some(FieldValue::Character(value)) => value,
             _ => return Err(self.error_expected(FieldType::Character)),
         };
@@ -24,7 +23,7 @@ impl<'a, 'de: 'a, R: Read + Seek> EnumAccess<'de> for &'a mut DbfDeserializer<R>
     }
 }
 
-impl<'a, 'de: 'a, R: Read + Seek> VariantAccess<'de> for &'a mut DbfDeserializer<R> {
+impl<'a, 'de: 'a> VariantAccess<'de> for &'a mut DbfDeserializer {
     type Error = DeserializeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -41,9 +40,9 @@ impl<'a, 'de: 'a, R: Read + Seek> VariantAccess<'de> for &'a mut DbfDeserializer
     fn tuple_variant<V: Visitor<'de>>(
         self,
         _len: usize,
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        self.deserialize_seq(visitor)
     }
 
     fn struct_variant<V: Visitor<'de>>(

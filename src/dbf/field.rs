@@ -3,25 +3,58 @@ use std::fmt;
 
 use crate::error::UnsupportedFieldTypeError;
 
+pub fn read_field_info(buf: &[u8]) -> Result<Vec<FieldInfo>, UnsupportedFieldTypeError> {
+    buf.chunks(32)
+        .scan(1usize, |acc_offset, info| {
+            if info.len() < 32 {
+                return None;
+            }
+
+            if info[0] == b'\r' {
+                return None;
+            }
+
+            let name_bytes = &info[0..=10];
+            let field_type = info[11];
+            let length = info[16] as usize;
+            let offset = *acc_offset;
+            *acc_offset += length;
+
+            match FieldInfo::new(name_bytes, field_type, length, offset) {
+                Ok(value) => Some(Ok(value)),
+                Err(e) => Some(Err(e)),
+            }
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug)]
 pub enum FieldType {
+    Binary,
     Character,
     Date,
     Float,
+    General,
+    Integer,
     Numeric,
     Logical,
     Memo,
+    Timestamp,
 }
 
 impl fmt::Display for FieldType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
+            FieldType::Binary => "Binary",
             FieldType::Character => "Character",
             FieldType::Date => "Date",
             FieldType::Float => "Float",
+            FieldType::General => "General",
+            FieldType::Integer => "Integer",
             FieldType::Numeric => "Numeric",
             FieldType::Logical => "Logical",
             FieldType::Memo => "Memo",
+            FieldType::Timestamp => "Timestamp",
         };
 
         f.write_str(name)
@@ -34,12 +67,16 @@ impl TryFrom<u8> for FieldType {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         let value = value as char;
         match value {
+            'B' => Ok(FieldType::Binary),
             'C' => Ok(FieldType::Character),
             'D' => Ok(FieldType::Date),
             'F' => Ok(FieldType::Float),
+            'G' => Ok(FieldType::General),
+            'I' => Ok(FieldType::Integer),
             'N' => Ok(FieldType::Numeric),
             'L' => Ok(FieldType::Logical),
             'M' => Ok(FieldType::Memo),
+            'T' => Ok(FieldType::Timestamp),
             _ => Err(UnsupportedFieldTypeError(value)),
         }
     }
@@ -82,11 +119,15 @@ impl FieldInfo {
 
 #[derive(Debug)]
 pub enum FieldValue {
+    Binary(Vec<u8>),
     Character(String),
-    Date(String),
+    Date(u16, u8, u8),
     Float(f64),
+    General(Vec<u8>),
+    Integer(i32),
     Numeric(f64),
     Logical(bool),
-    Memo(u32),
+    Memo(String),
+    Timestamp(u16, u8, u8, u8, u8, u8),
     Null,
 }

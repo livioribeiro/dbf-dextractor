@@ -1,13 +1,17 @@
-use std::fmt;
+use serde::{Deserialize, Serialize, Serializer};
 
-use serde::de::{Error, Unexpected, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::dbf::FieldValue;
+use crate::model::{Date, Timestamp};
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub enum Value {
     Str(String),
+    Int(i32),
     Num(f64),
     Bool(bool),
+    Date(Date),
+    Timestamp(Timestamp),
+    ByteBuf(Vec<u8>),
     Null,
 }
 
@@ -17,95 +21,32 @@ impl Serialize for Value {
         S: Serializer,
     {
         match *self {
-            Value::Str(ref value) => serializer.serialize_str(value),
-            Value::Num(value) => serializer.serialize_f64(value),
-            Value::Bool(value) => serializer.serialize_bool(value),
+            Value::Str(ref val) => serializer.serialize_str(val),
+            Value::Int(val) => serializer.serialize_i32(val),
+            Value::Num(val) => serializer.serialize_f64(val),
+            Value::Bool(val) => serializer.serialize_bool(val),
+            Value::Date(ref val) => serializer.serialize_str(&val.to_string()),
+            Value::Timestamp(ref val) => serializer.serialize_str(&val.to_string()),
+            Value::ByteBuf(ref val) => serializer.collect_seq(val),
             Value::Null => serializer.serialize_none(),
         }
     }
 }
 
-pub struct ValueVisitor;
-
-impl<'de> Visitor<'de> for ValueVisitor {
-    type Value = Value;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        formatter.write_str("Value")
-    }
-
-    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Bool(v))
-    }
-
-    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Num(v as f64))
-    }
-
-    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Num(v as f64))
-    }
-
-    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Num(v))
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Str(v.to_owned()))
-    }
-
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Str(v))
-    }
-
-    fn visit_none<E>(self) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Null)
-    }
-
-    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match deserializer.deserialize_option(ValueVisitor {})? {
-            Value::Null => Err(Error::invalid_type(Unexpected::Option, &self)),
-            value => Ok(value),
+impl From<FieldValue> for Value {
+    fn from(value: FieldValue) -> Self {
+        match value {
+            FieldValue::Binary(val) | FieldValue::General(val) => Value::ByteBuf(val),
+            FieldValue::Character(val) | FieldValue::Memo(val) => Value::Str(val),
+            FieldValue::Date(year, month, day) => Value::Date(Date::from((year, month, day))),
+            FieldValue::Float(val) => Value::Num(val),
+            FieldValue::Integer(val) => Value::Int(val),
+            FieldValue::Logical(val) => Value::Bool(val),
+            FieldValue::Numeric(val) => Value::Num(val),
+            FieldValue::Timestamp(year, month, day, hour, minute, second) => {
+                Value::Timestamp(Timestamp::from((year, month, day, hour, minute, second)))
+            }
+            FieldValue::Null => Value::Null,
         }
-    }
-
-    fn visit_unit<E>(self) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(Value::Null)
-    }
-}
-
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(ValueVisitor {})
     }
 }

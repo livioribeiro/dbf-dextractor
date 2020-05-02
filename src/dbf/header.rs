@@ -18,16 +18,19 @@ pub struct Header {
 impl Header {
     pub fn from_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
         let version = Version::try_from(reader.read_u8()?).unwrap();
-        let last_updated = (reader.read_u8()?, reader.read_u8()?, reader.read_u8()?);
+        let last_update = (
+            reader.read_u8()? as u16 + 1900,
+            reader.read_u8()?,
+            reader.read_u8()?,
+        )
+            .into();
         let record_count = reader.read_u32::<LittleEndian>()?;
         let header_length = reader.read_u16::<LittleEndian>()? as usize;
         let record_length = reader.read_u16::<LittleEndian>()? as usize;
 
-        dbg!(version);
-
         Ok(Self {
             version,
-            last_update: last_updated.into(),
+            last_update,
             record_count,
             header_length,
             record_length,

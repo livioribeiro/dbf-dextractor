@@ -1,36 +1,33 @@
-use serde::de::{Error, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::string::ToString;
 
-#[derive(Debug, Clone)]
-pub struct Date {
-    pub year: u16,
-    pub month: u8,
-    pub day: u8,
-}
+use serde::{Deserialize, Serialize, Serializer};
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Date(u16, u8, u8);
 
 impl Date {
-    pub fn new(year: u16, month: u8, day: u8) -> Self {
-        Self { year, month, day }
+    pub fn year(&self) -> u16 {
+        self.0
+    }
+
+    pub fn month(&self) -> u8 {
+        self.1
+    }
+
+    pub fn day(&self) -> u8 {
+        self.2
     }
 }
 
-impl From<(u8, u8, u8)> for Date {
-    fn from(value: (u8, u8, u8)) -> Self {
-        Self {
-            year: value.0 as u16 + 1900,
-            month: value.1,
-            day: value.2,
-        }
+impl From<(u16, u8, u8)> for Date {
+    fn from((year, month, day): (u16, u8, u8)) -> Self {
+        Self(year, month, day)
     }
 }
 
-impl From<String> for Date {
-    fn from(value: String) -> Self {
-        Self {
-            year: value[0..4].parse().unwrap(),
-            month: value[4..6].parse().unwrap(),
-            day: value[6..8].parse().unwrap(),
-        }
+impl ToString for Date {
+    fn to_string(&self) -> String {
+        format!("{}-{:02}-{:02}", self.0, self.1, self.2)
     }
 }
 
@@ -39,42 +36,59 @@ impl Serialize for Date {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!(
-            "{:04}-{:02}-{:02}",
-            self.year, self.month, self.day
-        ))
+        serializer.serialize_str(&self.to_string())
     }
 }
 
-struct DateVisitor;
+#[derive(Deserialize, Clone, Debug)]
+pub struct Timestamp(u16, u8, u8, u8, u8, u8);
 
-impl<'de> Visitor<'de> for DateVisitor {
-    type Value = Date;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("Date")
+impl Timestamp {
+    pub fn year(&self) -> u16 {
+        self.0
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(v.to_owned().into())
+    pub fn month(&self) -> u8 {
+        self.1
     }
 
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Ok(v.into())
+    pub fn day(&self) -> u8 {
+        self.2
+    }
+
+    pub fn hour(&self) -> u8 {
+        self.3
+    }
+
+    pub fn minute(&self) -> u8 {
+        self.4
+    }
+
+    pub fn second(&self) -> u8 {
+        self.5
     }
 }
 
-impl<'de> Deserialize<'de> for Date {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+impl From<(u16, u8, u8, u8, u8, u8)> for Timestamp {
+    fn from((year, month, day, hour, minute, second): (u16, u8, u8, u8, u8, u8)) -> Self {
+        Self(year, month, day, hour, minute, second)
+    }
+}
+
+impl ToString for Timestamp {
+    fn to_string(&self) -> String {
+        format!(
+            "{}-{:02}-{:02}T{:02}:{:02}:{:02}",
+            self.0, self.1, self.2, self.3, self.4, self.5
+        )
+    }
+}
+
+impl Serialize for Timestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        D: Deserializer<'de>,
+        S: Serializer,
     {
-        deserializer.deserialize_string(DateVisitor)
+        serializer.serialize_str(&self.to_string())
     }
 }

@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Version {
     FoxBase,
     DBase3,
