@@ -21,31 +21,49 @@ impl StdError for UnsupportedFieldTypeError {}
 pub struct FieldParseError {
     field_name: String,
     field_type: FieldType,
+    source: Option<Box<(dyn StdError + 'static)>>,
 }
 
 impl FieldParseError {
-    pub fn new<S>(field_name: S, field_type: FieldType) -> Self
+    pub fn new<S>(field_name: S, field_type: FieldType, source: Option<Box<dyn StdError>>) -> Self
     where
         S: Into<String>,
     {
         Self {
             field_name: field_name.into(),
             field_type,
+            source,
         }
     }
 }
 
 impl fmt::Display for FieldParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "Field '{}' ({}) could not be parsed'",
-            self.field_name, self.field_type
-        )
+        if let Some(source) = &self.source {
+            write!(
+                f,
+                "Field '{}' ({}) could not be parsed: {}",
+                self.field_name, self.field_type, source
+            )
+        } else {
+            write!(
+                f,
+                "Field '{}' ({}) could not be parsed",
+                self.field_name, self.field_type
+            )
+        }
     }
 }
 
-impl StdError for FieldParseError {}
+impl StdError for FieldParseError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        if let Some(e) = &self.source {
+            Some(&**e)
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct NoSuchFieldError {

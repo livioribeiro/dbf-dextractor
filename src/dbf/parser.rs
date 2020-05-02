@@ -1,6 +1,6 @@
 use std::convert::TryInto;
+use std::error::Error as StdError;
 use std::io::{Read, Seek};
-use std::num::ParseFloatError;
 
 use crate::dbf::{FieldInfo, FieldType, FieldValue, MemoReader};
 use crate::error::FieldParseError;
@@ -35,7 +35,7 @@ where
         return Ok(FieldValue::Null);
     }
 
-    let map_e = |_| FieldParseError::new(field.name.clone(), field.field_type.clone());
+    let map_e = |e| FieldParseError::new(field.name.clone(), field.field_type.clone(), Some(e));
 
     match field.field_type {
         FieldType::Logical => Ok(parse_logic(buf)),
@@ -43,25 +43,23 @@ where
         FieldType::Integer => parse_integer(buf).map_err(map_e),
         FieldType::Numeric => parse_numeric(buf).map_err(map_e),
         FieldType::Float => parse_float(buf).map_err(map_e),
-        FieldType::Date => Ok(parse_date(buf)),
+        FieldType::Date => parse_date(buf).map_err(map_e),
         FieldType::Timestamp => parse_timestamp(buf).map_err(map_e),
-        FieldType::Memo => parse_memo(buf, memo_reader),
-        FieldType::Binary => parse_binary(buf, memo_reader),
-        FieldType::General => parse_general(buf, memo_reader),
+        FieldType::Memo => parse_memo(buf, memo_reader).map_err(map_e),
+        FieldType::Binary => parse_binary(buf, memo_reader).map_err(map_e),
+        FieldType::General => parse_general(buf, memo_reader).map_err(map_e),
     }
 }
 
-fn memo_index(buf: &[u8]) -> Result<u32, Box<dyn std::error::Error>> {
-    let index = if buf.len() == 4 {
-        u32::from_le_bytes(buf.try_into().expect("parse binary field"))
+fn memo_index(buf: &[u8]) -> Result<u32, Box<dyn StdError>> {
+    if buf.len() == 4 {
+        Ok(u32::from_le_bytes(buf.try_into()?))
     } else {
         String::from_utf8_lossy(buf)
             .trim()
             .parse()
-            .expect("parse binary field")
-    };
-
-    Ok(index)
+            .map_err(From::from)
+    }
 }
 
 fn parse_logic(buf: &[u8]) -> FieldValue {
@@ -76,27 +74,27 @@ fn parse_character(buf: &[u8]) -> FieldValue {
     FieldValue::Character(String::from_utf8_lossy(buf).trim().to_owned())
 }
 
-fn parse_integer(buf: &[u8]) -> Result<FieldValue, ParseFloatError> {
-    let value = i32::from_be_bytes(buf.try_into().unwrap());
+fn parse_integer(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
+    let value = i32::from_be_bytes(buf.try_into()?);
     Ok(FieldValue::Integer(value))
 }
 
-fn parse_numeric(buf: &[u8]) -> Result<FieldValue, ParseFloatError> {
+fn parse_numeric(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let value = String::from_utf8_lossy(buf);
-    value.trim().parse().map(FieldValue::Numeric)
+    value.trim().parse().map(FieldValue::Numeric).map_err(From::from)
 }
 
-fn parse_float(buf: &[u8]) -> Result<FieldValue, ParseFloatError> {
+fn parse_float(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let value = String::from_utf8_lossy(buf);
-    value.trim().parse().map(FieldValue::Float)
+    value.trim().parse().map(FieldValue::Float).map_err(From::from)
 }
 
-fn parse_date(buf: &[u8]) -> FieldValue {
+fn parse_date(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let value = String::from_utf8_lossy(buf);
-    let year = value[0..4].parse().unwrap();
-    let month = value[4..6].parse().unwrap();
-    let day = value[6..8].parse().unwrap();
-    FieldValue::Date(year, month, day)
+    let year = value[0..4].parse()?;
+    let month = value[4..6].parse()?;
+    let day = value[6..8].parse()?;
+    Ok(FieldValue::Date(year, month, day))
 }
 
 // https://en.wikipedia.org/wiki/Julian_day#Julian_or_Gregorian_calendar_from_Julian_day_number
@@ -139,9 +137,9 @@ fn from_time_part_to_time(time_part: u32) -> (u8, u8, u8) {
     (hour as u8, minute as u8, second as u8)
 }
 
-fn parse_timestamp(buf: &[u8]) -> Result<FieldValue, ParseFloatError> {
-    let date_part = u32::from_le_bytes((&buf[..4]).try_into().unwrap());
-    let time_part = u32::from_le_bytes((&buf[4..]).try_into().unwrap());
+fn parse_timestamp(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
+    let date_part = u32::from_le_bytes((&buf[..4]).try_into()?);
+    let time_part = u32::from_le_bytes((&buf[4..]).try_into()?);
 
     let (year, month, day) = from_julian_day_to_gregorian_calender(date_part);
     let (hour, minute, second) = from_time_part_to_time(time_part);
@@ -154,13 +152,13 @@ fn parse_timestamp(buf: &[u8]) -> Result<FieldValue, ParseFloatError> {
 fn parse_memo<R>(
     buf: &[u8],
     memo_reader: &mut Option<MemoReader<R>>,
-) -> Result<FieldValue, FieldParseError>
+) -> Result<FieldValue, Box<dyn StdError>>
 where
     R: Read + Seek,
 {
     if let Some(reader) = memo_reader.as_mut() {
-        let index = memo_index(buf).unwrap();
-        let value = reader.read_memo(index).expect("parse memo");
+        let index = memo_index(buf)?;
+        let value = reader.read_memo(index)?;
         Ok(FieldValue::Memo(
             String::from_utf8_lossy(&value).into_owned(),
         ))
@@ -172,13 +170,13 @@ where
 fn parse_binary<R>(
     buf: &[u8],
     memo_reader: &mut Option<MemoReader<R>>,
-) -> Result<FieldValue, FieldParseError>
+) -> Result<FieldValue, Box<dyn StdError>>
 where
     R: Read + Seek,
 {
     if let Some(reader) = memo_reader.as_mut() {
-        let index = memo_index(buf).unwrap();
-        let value = reader.read_memo(index).expect("parse memo");
+        let index = memo_index(buf)?;
+        let value = reader.read_memo(index)?;
         Ok(FieldValue::Binary(value))
     } else {
         Ok(FieldValue::Null)
@@ -188,13 +186,13 @@ where
 fn parse_general<R>(
     buf: &[u8],
     memo_reader: &mut Option<MemoReader<R>>,
-) -> Result<FieldValue, FieldParseError>
+) -> Result<FieldValue, Box<dyn StdError>>
 where
     R: Read + Seek,
 {
     if let Some(reader) = memo_reader.as_mut() {
-        let index = memo_index(buf).unwrap();
-        let value = reader.read_memo(index).expect("parse memo");
+        let index = memo_index(buf)?;
+        let value = reader.read_memo(index)?;
         Ok(FieldValue::General(value))
     } else {
         Ok(FieldValue::Null)

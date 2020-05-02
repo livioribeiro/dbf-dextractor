@@ -3,10 +3,12 @@ use std::fmt;
 
 use crate::error::UnsupportedFieldTypeError;
 
+const FIELD_DESCRIPTOR_LENGTH: usize = 32;
+
 pub fn read_field_info(buf: &[u8]) -> Result<Vec<FieldInfo>, UnsupportedFieldTypeError> {
-    buf.chunks(32)
+    buf.chunks(FIELD_DESCRIPTOR_LENGTH)
         .scan(1usize, |acc_offset, info| {
-            if info.len() < 32 {
+            if info.len() < FIELD_DESCRIPTOR_LENGTH {
                 return None;
             }
 
@@ -30,31 +32,31 @@ pub fn read_field_info(buf: &[u8]) -> Result<Vec<FieldInfo>, UnsupportedFieldTyp
 
 #[derive(Clone, Debug)]
 pub enum FieldType {
-    Binary,
+    Logical,
     Character,
-    Date,
-    Float,
-    General,
     Integer,
     Numeric,
-    Logical,
-    Memo,
+    Float,
+    Date,
     Timestamp,
+    Memo,
+    Binary,
+    General,
 }
 
 impl fmt::Display for FieldType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            FieldType::Binary => "Binary",
+            FieldType::Logical => "Logical",
             FieldType::Character => "Character",
-            FieldType::Date => "Date",
-            FieldType::Float => "Float",
-            FieldType::General => "General",
             FieldType::Integer => "Integer",
             FieldType::Numeric => "Numeric",
-            FieldType::Logical => "Logical",
-            FieldType::Memo => "Memo",
+            FieldType::Float => "Float",
+            FieldType::Date => "Date",
             FieldType::Timestamp => "Timestamp",
+            FieldType::Memo => "Memo",
+            FieldType::Binary => "Binary",
+            FieldType::General => "General",
         };
 
         f.write_str(name)
@@ -73,9 +75,9 @@ impl TryFrom<u8> for FieldType {
             'F' => Ok(FieldType::Float),
             'G' => Ok(FieldType::General),
             'I' => Ok(FieldType::Integer),
-            'N' => Ok(FieldType::Numeric),
             'L' => Ok(FieldType::Logical),
             'M' => Ok(FieldType::Memo),
+            'N' => Ok(FieldType::Numeric),
             'T' => Ok(FieldType::Timestamp),
             _ => Err(UnsupportedFieldTypeError(value)),
         }
