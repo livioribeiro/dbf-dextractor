@@ -3,6 +3,7 @@ name = "dbf_dextractor"
 version = "0.1.0"
 authors = ["livio"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0.106", features = ["derive"] }
