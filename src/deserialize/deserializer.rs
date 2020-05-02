@@ -62,7 +62,7 @@ impl DbfDeserializer {
     }
 
     fn current_field_name(&self) -> &str {
-        &self.fields[self.fields.len() - self.values.len()].name
+        &self.fields[self.fields.len() - self.values.len() - 1].name
     }
 
     pub fn error_expected(&self, field_type: FieldType) -> DeserializeError {
