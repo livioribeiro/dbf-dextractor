@@ -81,12 +81,20 @@ fn parse_integer(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
 
 fn parse_numeric(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let value = String::from_utf8_lossy(buf);
-    value.trim().parse().map(FieldValue::Numeric).map_err(From::from)
+    value
+        .trim()
+        .parse()
+        .map(FieldValue::Numeric)
+        .map_err(From::from)
 }
 
 fn parse_float(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let value = String::from_utf8_lossy(buf);
-    value.trim().parse().map(FieldValue::Float).map_err(From::from)
+    value
+        .trim()
+        .parse()
+        .map(FieldValue::Float)
+        .map_err(From::from)
 }
 
 fn parse_date(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
@@ -126,15 +134,16 @@ fn from_julian_day_to_gregorian_calender(julian_day: u32) -> (u16, u8, u8) {
     (year as u16, month as u8, day as u8)
 }
 
-fn from_time_part_to_time(time_part: u32) -> (u8, u8, u8) {
+fn from_time_part_to_time(time_part: u32) -> (u8, u8, u8, u16) {
     let mut time_part = time_part as i64;
     let hour = time_part / 3_600_000;
     time_part -= hour * 3_600_000;
     let minute = time_part / 60_000;
     time_part -= minute * 60_000;
     let second = time_part / 1000;
+    let millisecond = time_part - (second * 1000);
 
-    (hour as u8, minute as u8, second as u8)
+    (hour as u8, minute as u8, second as u8, millisecond as u16)
 }
 
 fn parse_timestamp(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
@@ -142,10 +151,10 @@ fn parse_timestamp(buf: &[u8]) -> Result<FieldValue, Box<dyn StdError>> {
     let time_part = u32::from_le_bytes((&buf[4..]).try_into()?);
 
     let (year, month, day) = from_julian_day_to_gregorian_calender(date_part);
-    let (hour, minute, second) = from_time_part_to_time(time_part);
+    let (hour, minute, second, millisecond) = from_time_part_to_time(time_part);
 
     Ok(FieldValue::Timestamp(
-        year, month, day, hour, minute, second,
+        year, month, day, hour, minute, second, millisecond
     ))
 }
 

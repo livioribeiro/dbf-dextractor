@@ -44,10 +44,11 @@ pub struct TimestampAccess {
     hour: Option<u8>,
     minute: Option<u8>,
     second: Option<u8>,
+    millisecond: Option<u16>,
 }
 
 impl TimestampAccess {
-    pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Self {
+    pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8, millisecond: u16) -> Self {
         Self {
             year: Some(year),
             month: Some(month),
@@ -55,6 +56,7 @@ impl TimestampAccess {
             hour: Some(hour),
             minute: Some(minute),
             second: Some(second),
+            millisecond: Some(millisecond),
         }
     }
 }
@@ -77,6 +79,8 @@ impl<'de> SeqAccess<'de> for TimestampAccess {
         } else if let Some(value) = self.minute.take() {
             seed.deserialize(value.into_deserializer()).map(Some)
         } else if let Some(value) = self.second.take() {
+            seed.deserialize(value.into_deserializer()).map(Some)
+        } else if let Some(value) = self.millisecond.take() {
             seed.deserialize(value.into_deserializer()).map(Some)
         } else {
             Ok(None)

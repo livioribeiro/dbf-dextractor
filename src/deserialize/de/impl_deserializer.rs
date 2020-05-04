@@ -250,8 +250,8 @@ impl<'a, 'de: 'a> Deserializer<'de> for &'a mut DbfDeserializer {
             Some(FieldValue::Date(year, month, day)) => {
                 visitor.visit_seq(DateAccess::new(year, month, day))
             }
-            Some(FieldValue::Timestamp(year, month, day, hour, minute, second)) => {
-                visitor.visit_seq(TimestampAccess::new(year, month, day, hour, minute, second))
+            Some(FieldValue::Timestamp(year, month, day, hour, minute, second, millisecond)) => {
+                visitor.visit_seq(TimestampAccess::new(year, month, day, hour, minute, second, millisecond))
             }
             Some(_) => Err(self.error_expected(FieldType::Date)),
             None => Err(self.error_unexpected_null()),

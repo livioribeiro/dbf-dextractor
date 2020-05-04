@@ -71,17 +71,18 @@ pub struct Time {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
+    pub millisecond: u16,
 }
 
 impl Time {
-    pub fn new(hour: u8, minute: u8, second: u8) -> Self {
-        Self { hour, minute, second }
+    pub fn new(hour: u8, minute: u8, second: u8, millisecond: u16) -> Self {
+        Self { hour, minute, second, millisecond }
     }
 }
 
 impl fmt::Display for Time {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:02}:{:02}:{:02}", self.hour, self.minute, self.second)
+        write!(f, "{:02}:{:02}:{:02}.{:03}", self.hour, self.minute, self.second, self.millisecond)
     }
 }
 
@@ -92,10 +93,10 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-    pub(crate) fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Self {
+    pub(crate) fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8, millisecond: u16) -> Self {
         Self {
             date: Date { year, month, day },
-            time: Time { hour, minute, second },
+            time: Time { hour, minute, second, millisecond },
         }
     }
 }
@@ -151,8 +152,11 @@ impl<'de> Deserialize<'de> for Timestamp {
                 let second = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(5, &self))?;
+                let millisecond = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(6, &self))?;
 
-                Ok(Timestamp::new(year, month, day, hour, minute, second))
+                Ok(Timestamp::new(year, month, day, hour, minute, second, millisecond))
             }
         }
         deserializer.deserialize_seq(TimestampVisitor)

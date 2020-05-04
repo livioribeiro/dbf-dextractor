@@ -42,8 +42,8 @@ impl From<FieldValue> for Value {
             FieldValue::Numeric(val) => Value::Float(val),
             FieldValue::Float(val) => Value::Float(val),
             FieldValue::Date(year, month, day) => Value::Date(Date::new(year, month, day)),
-            FieldValue::Timestamp(year, month, day, hour, minute, second) => {
-                Value::Timestamp(Timestamp::new(year, month, day, hour, minute, second))
+            FieldValue::Timestamp(year, month, day, hour, minute, second, millisecond) => {
+                Value::Timestamp(Timestamp::new(year, month, day, hour, minute, second, millisecond))
             }
             FieldValue::Binary(val) | FieldValue::General(val) => Value::Bytes(val),
             FieldValue::Null => Value::Null,

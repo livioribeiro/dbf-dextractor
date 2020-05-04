@@ -129,6 +129,6 @@ pub enum FieldValue {
     Numeric(f64),
     Logical(bool),
     Memo(String),
-    Timestamp(u16, u8, u8, u8, u8, u8),
+    Timestamp(u16, u8, u8, u8, u8, u8, u16),
     Null,
 }
