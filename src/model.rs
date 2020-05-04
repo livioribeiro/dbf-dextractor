@@ -1,33 +1,25 @@
+use std::fmt;
 use std::string::ToString;
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct Date(u16, u8, u8);
+#[derive(Clone, Debug)]
+pub struct Date {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
 
 impl Date {
-    pub fn year(&self) -> u16 {
-        self.0
-    }
-
-    pub fn month(&self) -> u8 {
-        self.1
-    }
-
-    pub fn day(&self) -> u8 {
-        self.2
+    pub fn new(year: u16, month: u8, day: u8) -> Self {
+        Self { year, month, day }
     }
 }
 
-impl From<(u16, u8, u8)> for Date {
-    fn from((year, month, day): (u16, u8, u8)) -> Self {
-        Self(year, month, day)
-    }
-}
-
-impl ToString for Date {
-    fn to_string(&self) -> String {
-        format!("{}-{:02}-{:02}", self.0, self.1, self.2)
+impl fmt::Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}-{:02}-{:02}", self.year, self.month, self.day)
     }
 }
 
@@ -40,47 +32,77 @@ impl Serialize for Date {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct Timestamp(u16, u8, u8, u8, u8, u8);
+impl<'de> Deserialize<'de> for Date {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct DateVisitor;
+
+        impl<'de> Visitor<'de> for DateVisitor {
+            type Value = Date;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Timestamp")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Date, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let year = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let month = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let day = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                Ok(Date { year, month, day })
+            }
+        }
+        deserializer.deserialize_seq(DateVisitor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Time {
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+}
+
+impl Time {
+    pub fn new(hour: u8, minute: u8, second: u8) -> Self {
+        Self { hour, minute, second }
+    }
+}
+
+impl fmt::Display for Time {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:02}:{:02}:{:02}", self.hour, self.minute, self.second)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Timestamp {
+    pub date: Date,
+    pub time: Time,
+}
 
 impl Timestamp {
-    pub fn year(&self) -> u16 {
-        self.0
-    }
-
-    pub fn month(&self) -> u8 {
-        self.1
-    }
-
-    pub fn day(&self) -> u8 {
-        self.2
-    }
-
-    pub fn hour(&self) -> u8 {
-        self.3
-    }
-
-    pub fn minute(&self) -> u8 {
-        self.4
-    }
-
-    pub fn second(&self) -> u8 {
-        self.5
+    pub(crate) fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Self {
+        Self {
+            date: Date { year, month, day },
+            time: Time { hour, minute, second },
+        }
     }
 }
 
-impl From<(u16, u8, u8, u8, u8, u8)> for Timestamp {
-    fn from((year, month, day, hour, minute, second): (u16, u8, u8, u8, u8, u8)) -> Self {
-        Self(year, month, day, hour, minute, second)
-    }
-}
-
-impl ToString for Timestamp {
-    fn to_string(&self) -> String {
-        format!(
-            "{}-{:02}-{:02}T{:02}:{:02}:{:02}",
-            self.0, self.1, self.2, self.3, self.4, self.5
-        )
+impl fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}T{}", self.date, self.time)
     }
 }
 
@@ -90,5 +112,49 @@ impl Serialize for Timestamp {
         S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Timestamp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TimestampVisitor;
+
+        impl<'de> Visitor<'de> for TimestampVisitor {
+            type Value = Timestamp;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Timestamp")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Timestamp, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let year = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let month = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let day = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                let hour = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
+                let minute = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
+                let second = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
+
+                Ok(Timestamp::new(year, month, day, hour, minute, second))
+            }
+        }
+        deserializer.deserialize_seq(TimestampVisitor)
     }
 }

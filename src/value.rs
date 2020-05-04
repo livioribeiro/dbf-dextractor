@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 
 use crate::dbf::FieldValue;
 use crate::model::{Date, Timestamp};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Str(String),
     Int(i32),
@@ -23,7 +23,7 @@ impl Serialize for Value {
         match *self {
             Value::Bool(val) => serializer.serialize_bool(val),
             Value::Str(ref val) => serializer.serialize_str(val),
-            Value::Int(val) => serializer.serialize_i64(val as i64),
+            Value::Int(val) => serializer.serialize_i32(val),
             Value::Float(val) => serializer.serialize_f64(val),
             Value::Date(ref val) => serializer.serialize_str(&val.to_string()),
             Value::Timestamp(ref val) => serializer.serialize_str(&val.to_string()),
@@ -41,9 +41,9 @@ impl From<FieldValue> for Value {
             FieldValue::Integer(val) => Value::Int(val),
             FieldValue::Numeric(val) => Value::Float(val),
             FieldValue::Float(val) => Value::Float(val),
-            FieldValue::Date(year, month, day) => Value::Date(Date::from((year, month, day))),
+            FieldValue::Date(year, month, day) => Value::Date(Date::new(year, month, day)),
             FieldValue::Timestamp(year, month, day, hour, minute, second) => {
-                Value::Timestamp(Timestamp::from((year, month, day, hour, minute, second)))
+                Value::Timestamp(Timestamp::new(year, month, day, hour, minute, second))
             }
             FieldValue::Binary(val) | FieldValue::General(val) => Value::Bytes(val),
             FieldValue::Null => Value::Null,

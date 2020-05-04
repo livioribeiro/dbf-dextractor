@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 use std::fmt;
-
 use crate::error::UnsupportedFieldTypeError;
 
 const FIELD_DESCRIPTOR_LENGTH: usize = 32;
