@@ -7,7 +7,7 @@ Extract data from dbf files and deserialize with serde.
 ```rust
 use std::collections::BTreeMap;
 
-use serde::{Deserialize};
+use serde::Deserialize;
 
 use dbf_dextractor::{Value, Date, Timestamp};
 
